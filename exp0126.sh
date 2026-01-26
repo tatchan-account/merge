@@ -24,8 +24,8 @@ TIME_LIMIT="2h"
 BASELINE_OPTS=()
 NND_OPT=(--full-NND)
 PROPOSED_OPTS=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2)
-PROPOSED_OPTS_OPTA=(--time --lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 40 --keep 0.5)
-PROPOSED_OPTS_OPTB=(--time --lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 30 --keep 0.5)
+PROPOSED_OPTS_OPTA=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 40 --keep 0.5)
+PROPOSED_OPTS_OPTB=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 30 --keep 0.5)
 
 FAIL_LOG="${OUTDIR}/failures.tsv"
 printf "when\ttag\tdataset\tk\trun\texit_code\n" > "$FAIL_LOG"
