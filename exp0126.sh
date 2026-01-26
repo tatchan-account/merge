@@ -3,6 +3,11 @@ set -u
 set -o pipefail
 
 BIN="./bin/main"
+
+# --- 実行前チェック（ここでOK） ---
+command -v timeout >/dev/null || { echo "timeout not found"; exit 1; }
+[ -x "$BIN" ] || { echo "binary not executable: $BIN"; exit 1; }
+
 OUTDIR="results_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUTDIR"
 
@@ -17,7 +22,6 @@ DATASET_ADDITIONAL=(
 )
 
 KS=(20 40 60)
-KSOPT=(20)
 RHO="0.5"
 REPEAT=10
 
@@ -25,7 +29,7 @@ REPEAT=10
 TIME_LIMIT="2h"
 
 BASELINE_OPTS=()
-NND_OPT=(--full-NND)
+NND_OPTS=(--full-NND)
 PROPOSED_OPTS=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2)
 PROPOSED_OPTS_OPTA=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 40 --keep 0.5)
 PROPOSED_OPTS_OPTB=(--lsh --prefilter --proj-P 8 --lsh-L 4 --lsh-K 2 --lsh-w 64 --lsh-bucket 64 --lsh-cand 48 --pf-mult 2 --k-cap 30 --keep 0.5)
@@ -65,8 +69,8 @@ run_one () {
 
 for ds in "${DATASETS[@]}"; do
   for k in "${KS[@]}"; do
-    run_one "$ds" "$k" "baseline" "${NND_OPTS[@]}"
-    run_one "$ds" "$k" "baseline" "${BASELINE_OPTS[@]}"
+    run_one "$ds" "$k" "baseline_nnd" "${NND_OPTS[@]}"
+    run_one "$ds" "$k" "baseline_smerge" "${BASELINE_OPTS[@]}"
     run_one "$ds" "$k" "lsh_pf"    "${PROPOSED_OPTS[@]}"
   done
 done
@@ -76,12 +80,17 @@ for ds in "${DATASETS[@]}"; do
   run_one "$ds" 20 "k_cap_30" "${PROPOSED_OPTS_OPTB[@]}"
 done
 
-for ds in "${DATASETS[@]}"; do
+for ds in "${DATASET_ADDITIONAL[@]}"; do
   for k in "${KS[@]}"; do
-      run_one "$ds" "$k" "baseline" "${NND_OPTS[@]}"
-      run_one "$ds" "$k" "baseline" "${BASELINE_OPTS[@]}"
+      run_one "$ds" "$k" "baseline_nnd" "${NND_OPTS[@]}"
+      run_one "$ds" "$k" "baseline_smerge" "${BASELINE_OPTS[@]}"
       run_one "$ds" "$k" "lsh_pf"    "${PROPOSED_OPTS[@]}"
     done
+done
+
+for ds in "${DATASET_ADDITIONAL[@]}"; do
+  run_one "$ds" 20 "k_cap_40" "${PROPOSED_OPTS_OPTA[@]}"
+  run_one "$ds" 20 "k_cap_30" "${PROPOSED_OPTS_OPTB[@]}"
 done
 
 echo "All done. Logs in $OUTDIR"

@@ -8,7 +8,6 @@
 #include <filesystem>
 
 #include "dataset.h"
-#include "l2_squared.hpp"
 #include "splitmix64.h"
 
 #ifdef _OPENMP
@@ -99,7 +98,7 @@ int main(int argc, char** argv) {
     SplitMix64 rng(seed);
     std::vector<uint32_t> qids = reservoir_sample_u32((uint32_t)ds.n, Q, rng);
 
-    L2Squared dist{ds};
+    dist_func dist{ds};
 
     // storage: Q * kgt ids
     std::vector<uint32_t> out_nbr((size_t)Q * (size_t)kgt, 0);
