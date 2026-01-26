@@ -35,14 +35,15 @@ class PStableLSHIndex {
 public:
     struct Entry {
         uint64_t key;
-        uint32_t id; // global id
+        // global id
+        uint32_t id;
     };
 
     PStableLSHIndex() = default;
 
-    // Build index over global ids in [start, end)
+    // [start, end)でのLSHインデックスを作成
     PStableLSHIndex(const Dataset& ds, int start, int end, const PStableLSHParams& pp)
-            : ds_(&ds), start_(start), end_(end), p_(pp) {
+        : ds_(&ds), start_(start), end_(end), p_(pp) {
         build();
     }
 

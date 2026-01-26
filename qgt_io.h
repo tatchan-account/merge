@@ -6,6 +6,10 @@
 #include <sstream>
 #include <stdexcept>
 
+/*
+ * 正解ファイルのIOとRecall計算
+ */
+
 // 以下の入力（正確には正解ファイル）を想定
 // ヘッダ"n k"があり、その後にn行"nb1 ... nbk" or "i nb1 ... nbk"が並ぶ
 // ヘッダ"k"があり、その後にn行(nは数えるなりする)"nb1 ... nbk" or "i nb1 ... nbk"が並ぶ
@@ -158,4 +162,99 @@ inline QueryGT load_qgt(const std::string& path) {
     }
 
     return gt;
+}
+
+
+
+// recall計算
+static double recall_from_gt_topk(const kNNGraph& g, const FullGT& gt, int k_eval, int eval_n) {
+    const int n = g.n();
+    const int k_pred = g.k();
+    const int en = (eval_n <= 0) ? n : std::min(eval_n, n);
+    const int ke = std::min(k_eval, (int)gt.k);
+    if (en <= 0 || ke <= 0) return 0.0;
+    if ((int)gt.n < en) throw std::runtime_error("GT n smaller than eval_n");
+
+    std::vector<int> idx;
+    idx.reserve((size_t)k_pred);
+    std::vector<uint32_t> top;
+    top.reserve((size_t)ke);
+
+    double sum = 0.0;
+    for (int i = 0; i < en; ++i) {
+        const uint32_t* nbr = g.nbr_ptr(i);
+        const float*    ds  = g.dist_ptr(i);
+
+        idx.clear();
+        for (int t = 0; t < k_pred; ++t) {
+            if (nbr[t] == kNNGraph::invalid_id()) continue;
+            if (!std::isfinite(ds[t])) continue;
+            idx.push_back(t);
+        }
+        std::sort(idx.begin(), idx.end(), [&](int a, int b){ return ds[a] < ds[b]; });
+
+        top.clear();
+        for (int t = 0; t < (int)idx.size() && (int)top.size() < ke; ++t) {
+            top.push_back(nbr[idx[t]]);
+        }
+
+        const uint32_t* truth = gt.nbr.data() + (size_t)i * (size_t)gt.k;
+
+        int hit = 0;
+        for (int t = 0; t < ke; ++t) {
+            const uint32_t e = truth[t];
+            for (uint32_t p : top) {
+                if (p == e) { ++hit; break; }
+            }
+        }
+        sum += (double)hit / (double)ke;
+    }
+    return sum / (double)en;
+}
+
+static double recall_from_qgt_topk(const kNNGraph& g, const QueryGT& qgt, int k_eval, int eval_q) {
+    const int k_pred = g.k();
+    const int n = g.n();
+    const int qe = (eval_q <= 0) ? (int)qgt.Q : std::min(eval_q, (int)qgt.Q);
+    const int ke = std::min(k_eval, (int)qgt.k);
+    if (ke <= 0) return 0.0;
+
+    std::vector<int> idx;
+    idx.reserve((size_t)k_pred);
+
+    double sum = 0.0;
+    for (int qi = 0; qi < qe; ++qi) {
+        const uint32_t qid = qgt.qid[(size_t)qi];
+        if (qid >= (uint32_t)n) throw std::runtime_error("QGT qid out of range");
+
+        const uint32_t* nbr = g.nbr_ptr((int)qid);
+        const float*    ds  = g.dist_ptr((int)qid);
+
+        idx.clear();
+        for (int t = 0; t < k_pred; ++t) {
+            if (nbr[t] == kNNGraph::invalid_id()) continue;
+            idx.push_back(t);
+        }
+        // sort by distance
+        std::sort(idx.begin(), idx.end(), [&](int a, int b){ return ds[a] < ds[b]; });
+
+        // collect top-ke ids
+        std::vector<uint32_t> top;
+        top.reserve((size_t)ke);
+        for (int t = 0; t < (int)idx.size() && (int)top.size() < ke; ++t) {
+            top.push_back(nbr[idx[t]]);
+        }
+
+        const uint32_t* truth = qgt.nbr.data() + (size_t)qi * (size_t)qgt.k;
+
+        int hit = 0;
+        for (int t = 0; t < ke; ++t) {
+            const uint32_t e = truth[t];
+            for (uint32_t p : top) {
+                if (p == e) { ++hit; break; }
+            }
+        }
+        sum += (double)hit / (double)ke;
+    }
+    return sum / (double)qe;
 }
