@@ -12,6 +12,9 @@ DATASETS=(
   "mnist_train.txt"
   "gist1m.txt"
 )
+DATASET_ADDITIONAL=(
+  "sift10m.txt"
+)
 
 KS=(20 40 60)
 KSOPT=(20)
@@ -68,9 +71,17 @@ for ds in "${DATASETS[@]}"; do
   done
 done
 
-for ds in "${DATAOPT[@]}"; do
+for ds in "${DATASETS[@]}"; do
   run_one "$ds" 20 "k_cap_40" "${PROPOSED_OPTS_OPTA[@]}"
   run_one "$ds" 20 "k_cap_30" "${PROPOSED_OPTS_OPTB[@]}"
+done
+
+for ds in "${DATASETS[@]}"; do
+  for k in "${KS[@]}"; do
+      run_one "$ds" "$k" "baseline" "${NND_OPTS[@]}"
+      run_one "$ds" "$k" "baseline" "${BASELINE_OPTS[@]}"
+      run_one "$ds" "$k" "lsh_pf"    "${PROPOSED_OPTS[@]}"
+    done
 done
 
 echo "All done. Logs in $OUTDIR"
