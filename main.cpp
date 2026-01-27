@@ -590,7 +590,6 @@ int main(int argc, char** argv) {
         proj_ptr = &proj;
     }
 
-    // Merge into extended capacity graph
     // （keep_k == k_targetならば、ただのコピーになる）
     tt.tic();
     kNNGraph g_init(k_cap, n);
@@ -608,7 +607,7 @@ int main(int argc, char** argv) {
         if (keep_k >= k_target) {
             for (int t = 0; t < k_target; ++t) { nbr[t] = s_nbr[t]; dsr[t] = s_ds[t]; flg[t] = 0; }
         } else {
-            // select smallest keep_k by distance
+            // 最小のkeep_kを選ぶ
             std::vector<int> idx((size_t)k_target);
             for (int t = 0; t < k_target; ++t) idx[(size_t)t] = t;
             std::nth_element(idx.begin(), idx.begin() + keep_k, idx.end(),[&](int a, int b){ return s_ds[a] < s_ds[b]; });
@@ -741,7 +740,7 @@ int main(int argc, char** argv) {
         << " rand_added=" << st.rand_added
         << "\n";
 
-    std::cout << "k, k_cap, time_seed, time_refine, time_total, recall@k\n";
+    std::cout << "k, k_cap, time_seed, time_refine, time_merge, time_total, recall@k\n";
     std::cout << "result: "
         << k_target << ", "
         << k_cap << ", "

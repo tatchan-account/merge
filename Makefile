@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS = -O3 -std=c++17 -march=native -Wall -Wextra
-LDFLAGS  = -fopenmp
+# LDFLAGS  = -fopenmp
 
 BIN = nndescent smerge lsh_merge make_qgt main
 BIN_DIR = bin
