@@ -689,7 +689,7 @@ int main(int argc, char** argv) {
     // サブグラフと同じサンプリングにならないように、少しseedを帰る
     p_refine.seed = p.seed ^ 0xfeedfacecafebeefULL;
 
-    g = (iter_recall) ?
+    g = (!iter_recall) ?
             nndescent_full(k_cap, n, dist_global, CopyInit{&g_init}, p_refine)
             : nndescent_full(k_cap, n, dist_global, CopyInit{&g_init}, p_refine, recp);
     t_refine = tt.toc_ms();
