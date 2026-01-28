@@ -11,7 +11,7 @@
 #define RECALL_LEN_MAX 20
 
 struct NNDParams {
-    int max_iter = 20;
+    int max_iter = 50;
     float rho = 0.5;
     float delta = 0.001;
     uint64_t seed = 12345;

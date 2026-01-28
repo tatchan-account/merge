@@ -23,7 +23,7 @@ DATASET_ADDITIONAL=(
 
 KS=(20)
 RHO="0.5"
-REPEAT=10
+REPEAT=2
 
 # 1回あたりの上限時間（必要に応じて調整）
 TIME_LIMIT="2h"
@@ -70,13 +70,13 @@ run_one () {
   done
 }
 
-for ds in "${DATASETS[@]}"; do
-  for k in "${KS[@]}"; do
-    run_one "$ds" "$k" "nnd_iter_rec" "${NND_OPTS[@]}"
-    run_one "$ds" "$k" "lsh_iter_rec" "${PROPOSED_OPTS[@]}"
-    run_one "$ds" "$k" "smerge_iter_rec" "${BASELINE_OPTS[@]}"
-  done
-done
+#for ds in "${DATASETS[@]}"; do
+#  for k in "${KS[@]}"; do
+#    run_one "$ds" "$k" "nnd_iter_rec" "${NND_OPTS[@]}"
+#    run_one "$ds" "$k" "lsh_iter_rec" "${PROPOSED_OPTS[@]}"
+#    run_one "$ds" "$k" "smerge_iter_rec" "${BASELINE_OPTS[@]}"
+#  done
+#done
 
 for ds in "${DATASET_ADDITIONAL[@]}"; do
   for k in "${KS[@]}"; do
