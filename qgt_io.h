@@ -6,6 +6,8 @@
 #include <sstream>
 #include <stdexcept>
 
+namespace fs = std::filesystem;
+
 /*
  * 正解ファイルのIOとRecall計算
  */
@@ -257,4 +259,49 @@ static double recall_from_qgt_topk(const kNNGraph& g, const QueryGT& qgt, int k_
         sum += (double)hit / (double)ke;
     }
     return sum / (double)qe;
+}
+
+struct recallParams {
+    int eval_n = -1;
+    int eval_q = -1;
+    fs::path gt_path;
+    fs::path qgt_path;
+};
+
+/*
+ * recallを計算する関数
+ */
+double calc_recall(const kNNGraph& g,int k_target, int eval_n, int eval_q, const fs::path& gt_path, const fs::path& qgt_path){
+    if (fs::exists(gt_path)) {
+        try {
+            FullGT gt = load_full_gt(gt_path);
+            if ((int)gt.n != g.n()) {
+                std::cerr << "GT n mismatch: gt.n=" << gt.n << " vs data.n=" << g.n() << "\n";
+                return -1;
+            }
+            // std::cout << "GT loaded: " << gt_path.string() << " (k_gt=" << gt.k << ")\n";
+            const int en = (eval_n <= 0) ? g.n() : std::min(eval_n, g.n());
+            double rec = recall_from_gt_topk(g, gt, k_target, en);
+            // std::cout << "recall@" << k_target << " over first " << en << " points = " << rec << "\n";
+            return rec;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load GT: " << e.what() << "\n";
+            return -1;
+        }
+    } else if (fs::exists(qgt_path)) {
+        try {
+            QueryGT qgt = load_qgt(qgt_path.string());
+            std::cout << "QGT loaded: " << qgt_path.string() << " (Q=" << (uint64_t)qgt.Q << ", k_gt=" << (uint64_t)qgt.k << ")\n";
+            double rec = recall_from_qgt_topk(g, qgt, k_target, eval_q);
+            const int qe = (eval_q <= 0) ? (int)qgt.Q : std::min(eval_q, (int)qgt.Q);
+            std::cout << "recall@" << k_target << " over Q=" << qe << " queries = " << rec << "\n";
+            return rec;
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load QGT: " << e.what() << "\n";
+            return -1;
+        }
+    } else {
+        std::cerr << "GT/QGT not found under ./ans or ./and(skip recall)\n";
+        return -1;
+    }
 }

@@ -6,7 +6,9 @@
 #include <numeric>
 #include "knngraph.h"
 #include "reverse_builder.h"
+#include "qgt_io.h"
 #include "splitmix64.h"
+#define RECALL_LEN_MAX 20
 
 struct NNDParams {
     int max_iter = 20;
@@ -166,7 +168,7 @@ uint64_t join_and_update(kNNGraph& g, const ReverseBuilder& rb,int m, const Dist
 
 // NN-Descent full（initializer差し替え可能）
 template<class Dist, class Initializer>
-kNNGraph nndescent_full(int k, int n, const Dist& dist, const Initializer& init, const NNDParams& p, bool verbose = false) {
+kNNGraph nndescent_full(int k, int n, const Dist& dist, const Initializer& init, const NNDParams& p) {
     kNNGraph g(k, n);
     SplitMix64 rng(p.seed);
 
@@ -190,14 +192,63 @@ kNNGraph nndescent_full(int k, int n, const Dist& dist, const Initializer& init,
         sample_and_build_reverse(g, rb, m, rng);
         uint64_t c = join_and_update(g, rb, m, dist, rng);
 
-        if (verbose) {
-            // stderr に出すとデータ出力と混ざりにくい
-            std::cerr << "[iter " << it << "] changes=" << c
-                      << " threshold=" << threshold << " m=" << m << "\n";
-        }
-
         if (c < threshold) break;
     }
+
+    return g;
+}
+
+template<class Dist, class Initializer>
+kNNGraph nndescent_full(int k, int n, const Dist& dist, const Initializer& init, const NNDParams& p, const recallParams& rp) {
+    kNNGraph g(k, n);
+    SplitMix64 rng(p.seed);
+    // Recall vs iter times 用
+    std::vector<double> recall(RECALL_LEN_MAX, -1);
+    int iter_times = 0;
+
+    // 初期化（ランダム／後でLSHに差し替え）
+    init(g, dist, rng);
+
+    // m = ceil(rho*k)
+    int m = (int) std::ceil(p.rho * (float) k);
+    if (m < 1) m = 1;
+    // 小さいkで退化しないように下限（k>=2ならm>=2）
+    if (k >= 2 && m < 2) m = 2;
+    if (m > k) m = k;
+
+    ReverseBuilder rb(n, m, p.seed ^ 0x9e3779b97f4a7c15ULL);
+
+    // 停止閾値：delta * n * k
+    uint64_t threshold = (uint64_t)(p.delta * (double) n * (double) k);
+    if (threshold < 1) threshold = 1;
+
+    for (iter_times = 0; iter_times < p.max_iter; ++iter_times) {
+        sample_and_build_reverse(g, rb, m, rng);
+        uint64_t c = join_and_update(g, rb, m, dist, rng);
+
+        // 各回recallを計算して表示
+        if (iter_times >= RECALL_LEN_MAX) recall.resize(2 * RECALL_LEN_MAX);
+        recall[iter_times] = calc_recall(g, k, rp.eval_n, rp.eval_q, rp.gt_path, rp.qgt_path);
+        // std::cerr << "Im " << iter_times << " of repetition\n";
+
+        if (c < threshold) {
+            iter_times++;
+            break;
+        }
+    }
+
+    // std::cerr << "iter_times is " << iter_times << "\n";
+
+    std::cout
+        << "iter times vs recall : iter_times = "
+        << iter_times
+        << "\n"
+        << "iter-recall: ";
+    for (int i = 0; i < iter_times; ++i) {
+        std::cout << recall[i];
+        if (i < iter_times - 1) std::cout << ", ";
+    }
+    std::cout << std::endl;
 
     return g;
 }

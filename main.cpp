@@ -244,45 +244,6 @@ static void inject_lsh_seeds(kNNGraph& g, int v, int k_target, int k_cap, int n1
     }
 }
 
-
-/*
- * recallを計算する関数
- */
-double calc_recall(const kNNGraph& g,int k_target, int eval_n, int eval_q, const fs::path& gt_path, const fs::path& qgt_path){
-    if (fs::exists(gt_path)) {
-        try {
-            FullGT gt = load_full_gt(gt_path);
-            if ((int)gt.n != g.n()) {
-                std::cerr << "GT n mismatch: gt.n=" << gt.n << " vs data.n=" << g.n() << "\n";
-                return -1;
-            }
-            std::cout << "GT loaded: " << gt_path.string() << " (k_gt=" << gt.k << ")\n";
-            const int en = (eval_n <= 0) ? g.n() : std::min(eval_n, g.n());
-            double rec = recall_from_gt_topk(g, gt, k_target, en);
-            std::cout << "recall@" << k_target << " over first " << en << " points = " << rec << "\n";
-            return rec;
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to load GT: " << e.what() << "\n";
-            return -1;
-        }
-    } else if (fs::exists(qgt_path)) {
-        try {
-            QueryGT qgt = load_qgt(qgt_path.string());
-            std::cout << "QGT loaded: " << qgt_path.string() << " (Q=" << (uint64_t)qgt.Q << ", k_gt=" << (uint64_t)qgt.k << ")\n";
-            double rec = recall_from_qgt_topk(g, qgt, k_target, eval_q);
-            const int qe = (eval_q <= 0) ? (int)qgt.Q : std::min(eval_q, (int)qgt.Q);
-            std::cout << "recall@" << k_target << " over Q=" << qe << " queries = " << rec << "\n";
-            return rec;
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to load QGT: " << e.what() << "\n";
-            return -1;
-        }
-    } else {
-        std::cerr << "GT/QGT not found under ./ans or ./and(skip recall)\n";
-        return -1;
-    }
-}
-
 static void usage(const char* proc) {
     std::cerr
         << "Usage: " << proc << " <name.txt> <k_target> <split_ratio>\n"
@@ -324,7 +285,8 @@ static void usage(const char* proc) {
         << "  --eval-n <int>        evaluate first N points when GT is used (default: all)\n"
         << "  --require-gt          exit with code 2 if GT/QGT is missing\n"
         << "  --refine-delta <int>  Threshold for refinemen\n"
-        << "  --full-NND  Create graph fully by NN-Descent\n";
+        << "  --full-NND  Create graph fully by NN-Descent\n"
+        << "--iter-recall  Calculate each round of recall\n";
 }
 
 int main(int argc, char** argv) {
@@ -384,6 +346,8 @@ int main(int argc, char** argv) {
     // bool require_gt = false;
     float keep_ratio = 0.5;
     bool onlyNND = false;
+    // iter vs recallの計算（重いので基本はoff）
+    bool iter_recall = false;
 
     for (int i = 4; i < argc; ++i) {
         std::string a = argv[i];
@@ -427,6 +391,7 @@ int main(int argc, char** argv) {
             else if (a == "--pf-max") pf_max = std::stoi(need("--pf-max"));
             else if (a == "--eval-q") eval_q = std::stoi(need("--eval-q"));
             else if (a == "--full-NND") onlyNND = true;
+            else if (a == "--iter-recall") iter_recall = true;
             else {
                 std::cerr << "Unknown option: " << a << "\n";
                 usage(argv[0]);
@@ -504,14 +469,22 @@ int main(int argc, char** argv) {
     PStableLSHIndex idx_s1;
     PStableLSHIndex idx_s2;
 
-    tt.tic();
-
     const fs::path gt_path  = ans_path_for_gt(name_file);
     const fs::path qgt_path = ans_path_for_qgt(name_file);
 
+    recallParams recp;
+    recp.eval_n = eval_n;
+    recp.eval_q = eval_q;
+    recp.gt_path = gt_path;
+    recp.qgt_path = qgt_path;
+
+    tt.tic();
+
     // NN-Descentオンリーで実行
     if (onlyNND){
-        kNNGraph g = nndescent_full(k_target, n, dist_global, RandomInit{}, p);
+        kNNGraph g = (!iter_recall) ?
+                nndescent_full(k_target, n, dist_global, RandomInit{}, p)
+                : nndescent_full(k_target, n, dist_global, RandomInit{}, p, recp);
         double t_onlyNND = tt.toc_ms();
         double rec_val = calc_recall(g, k_target, eval_n, eval_q, gt_path, qgt_path);
         if (rec_val < 0) {
@@ -519,7 +492,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout
-            << "k, k_cap, time, recall@\n"
+            << "k, k_cap, time, recall@k\n"
             << "result: "
             << k_target << ", "
             << k_cap << ", "
@@ -716,7 +689,9 @@ int main(int argc, char** argv) {
     // サブグラフと同じサンプリングにならないように、少しseedを帰る
     p_refine.seed = p.seed ^ 0xfeedfacecafebeefULL;
 
-    g = nndescent_full(k_cap, n, dist_global, CopyInit{&g_init}, p_refine);
+    g = (iter_recall) ?
+            nndescent_full(k_cap, n, dist_global, CopyInit{&g_init}, p_refine)
+            : nndescent_full(k_cap, n, dist_global, CopyInit{&g_init}, p_refine, recp);
     t_refine = tt.toc_ms();
 
     // 合計時間
@@ -724,7 +699,9 @@ int main(int argc, char** argv) {
 	t_merge = t_seed + t_refine;
 
     double rec = -1;
-    rec = calc_recall(g, k_target, eval_n, eval_q, gt_path, qgt_path);
+    if (!iter_recall) {
+        rec = calc_recall(g, k_target, eval_n, eval_q, gt_path, qgt_path);
+    }
 
     if (rec < 0) std::cerr << "Recall calculation was skipped.\n";
 
